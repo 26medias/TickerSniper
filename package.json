@@ -10,6 +10,13 @@
   "license": "ISC",
   "dependencies": {
     "axios": "^1.7.9",
+    "canvas": "^3.1.0",
+    "chart.js": "^4.4.7",
+    "chartjs-chart-financial": "^0.2.1",
+    "graceful-fs": "^4.2.11",
+    "pstack": "^0.1.5",
+    "techchart": "^0.0.1",
+    "unzipper": "^0.12.3",
     "ws": "^8.18.0"
   }
 }

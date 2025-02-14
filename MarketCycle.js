@@ -242,6 +242,10 @@ class MarketCycle {
         );
     }
 
+    RSI(period = 14) {
+        return this.hta.RSI(this.data, period);
+    }
+
     build() {
         // Compute MarketCycle and add shifted values.
         const mcValues = this.mc(14, 20);

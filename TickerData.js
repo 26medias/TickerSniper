@@ -29,6 +29,7 @@ class TickerData {
             console.warn('Warning: POLYGON_API_KEY not set.');
         }
         this.refreshTimer = null;
+        this.loadCache();
     }
 
     async loadCache() {
