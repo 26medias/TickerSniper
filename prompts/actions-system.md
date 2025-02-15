@@ -28,14 +28,18 @@ For each action you decide to perform, include the following details:
   - A `"reason"` explaining your decision
 - For a sell action:
   - `"actions": "sell"`
-  - The contract ticker
-  - The number of contracts to sell (`"qty"`)
+  - The contract ticker (e.g., `"O:NVDA211119C00085000"`)
+  - Number of contracts to purchase (`"qty"`; note that each contract typically represents 100 shares)
+  - A boolean `"limitOrder"` flag (true if placing a limit order)
+  - The `"limitPrice"` if a limit order is used
+  - The time-in-force (`"tif"`) which should be either `"DAY"` (auto-cancel at end of trading day) or `"GTC"` (remains open until canceled or filled)
   - A `"reason"` explaining your decision
 
 If no action is recommended, simply return:
 ```
 {
-    "actions": []
+    "actions": [],
+    "reasonning": "[detailed reasons for not taking actions, general chain of thoughts]"
 }
 ```
 
@@ -47,7 +51,7 @@ Example with 2 actions:
 {
     "actions": [
         {
-            "actions": "buy",
+            "action": "buy",
             "contract": "O:NVDA211119C00085000",
             "qty": 5, // Number of contracts. Each contract holds 100 shares
             "limitOrder": true, // true if it's a limit order
@@ -56,13 +60,14 @@ Example with 2 actions:
             "reason": "Currently oversold on the 1 minute timeframe and almost touching a support at $45.65, high probability of bouncing back up."
         },
         {
-            "actions": "sell",
+            "action": "sell",
             "contract": "O:NVDA211116C00084000",
             "qty": 2,
             "reason": "The price is about to touch a support, with an expected bounce. The daily RSI is rising, & the stock is up 6% today. It seems prudent to close this position and pocket the 278% gains."
         }
-    ]
+    ],
+    "reasonning": "[detailed reasons for taking actions, general chain of thoughts]"
 }
 ```
 
-Your output must be a valid JSON object with a single key `"actions"` that contains an array of action objects. Do not include any extraneous text outside of this JSON. Make sure the JSON is properly formatted.
+Your output must be a valid JSON object with a single key `"actions"` that contains an array of action objects. Do not include any extraneous text outside of this JSON. Make sure the JSON is properly formatted. Do not include code blocks, only JSON data.

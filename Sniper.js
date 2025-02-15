@@ -24,8 +24,11 @@ class Sniper {
         this.trading = new PaperTrading(this.data_dir);
         this.options = new Options();
         this.gpt = new GPT();
+
+        this.model = "gpt-4o-mini"
     }
 
+    // Init the market data monitoring
     init() {
         const scope = this;
         this.datastore[this.main_timeframe] = new TickerData({
@@ -60,6 +63,8 @@ class Sniper {
         this.ask();
     }
 
+
+    // When there's a tick
     onMarketDataUpdate(timeframe) {
         /*const data = this.datastore[timeframe].data();
         const closes = data.map(item => item.close);
@@ -76,6 +81,7 @@ class Sniper {
         this.ask(timeframe);
     }
 
+    // Build the market data for a timeframe: mc, rsi
     buildMarketData(timeframe) {
         const history = this.datastore[timeframe];
         let last50 = history.data(50);
@@ -93,6 +99,7 @@ class Sniper {
         return last50;
     }
 
+    // Generate a report for the LLM
     async generateReport() {
         const scope = this;
         let output = {};
@@ -158,7 +165,7 @@ class Sniper {
         const day = "2025-02-21"//d.toISOString().split("T")[0]; @DEBUG
         let contracts = await this.options.getAvailableContracts(this.ticker, day);
         contracts = contracts.filter(item => {
-            return Math.abs((output.current_price-item.strike_price)/output.current_price) <= 0.01
+            return Math.abs((output.current_price-item.strike)/output.current_price) <= 0.01
         })
         //console.log(day, contracts)
         output.option_contracts = JSON.stringify(contracts, null, 4);
@@ -222,6 +229,7 @@ class Sniper {
         return output;
     }
 
+    // Ask the LLM what to do with a report
     async ask() {
         const report = await this.generateReport();
         //console.log(report)
@@ -229,6 +237,52 @@ class Sniper {
         const user_prompt = await this.gpt.getPrompt("prompts/actions-user.md", report)
         console.log("sys_prompt", sys_prompt)
         console.log("user_prompt", user_prompt)
+
+        const response = await this.gpt.ask(sys_prompt, user_prompt, [], [], this.model) //"o3-mini"
+        console.log("response", JSON.stringify(response, null, 4))
+
+        const message = JSON.parse(response.choices[0].message.content);
+        const actions = message.actions;
+        const reasonning = message.reasonning;
+        console.log(actions);
+        console.log(reasonning);
+    }
+
+    // Act on the actions returned
+    async act(llm_response) {
+        const scope = this;
+        const actions = llm_response.actions;
+        const reasonning = llm_response.reasonning;
+        actions.forEach(item => {
+            const last = scope.datastore[scope.main_timeframe].data(1)[0]
+
+            switch (item.action) {
+                case "buy":
+                    scope.trading.buy(
+                        scope.ticker,
+                        last.timestamp,
+                        item.limitPrice ? item.limitPrice : last.close,
+                        item.qty,
+                        item.reason,
+                        item.limitOrder,
+                        item.tif,
+                        item.contract
+                    )
+                break;
+                case "sell":
+                    scope.trading.close(scope.ticker,
+                        last.timestamp,
+                        item.limitPrice ? item.limitPrice : last.close,
+                        item.qty,
+                        item.reason,
+                        item.limitOrder,
+                        item.tif,
+                        item.contract
+                    )
+                break;
+            }
+            
+        })
     }
 }
 

@@ -14,6 +14,7 @@
     "chart.js": "^4.4.7",
     "chartjs-chart-financial": "^0.2.1",
     "graceful-fs": "^4.2.11",
+    "openai": "^4.85.1",
     "pstack": "^0.1.5",
     "techchart": "^0.0.1",
     "unzipper": "^0.12.3",
