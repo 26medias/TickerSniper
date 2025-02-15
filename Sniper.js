@@ -24,6 +24,8 @@ class Sniper {
         this.datastore = {};
         this.data = {};
 
+        this.allowTrading = false;
+
         this.reddit = new RedditTracker(this.data_dir+"/reddit");
         this.newsLoader = new NewsLoader(this.data_dir+"/news");
         this.trading = new PaperTrading(this.data_dir+"/trading");
@@ -85,6 +87,9 @@ class Sniper {
     // When there's a tick
     // Decide if we need to call the LLM
     async onMarketDataUpdate(timeframe) {
+        if (!this.allowTrading) {
+            return false;
+        }
         let askLLM = false;
         // Refresh reddit
         this.reddit.refresh(10);
