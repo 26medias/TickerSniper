@@ -84,6 +84,7 @@ class GPT {
 
 module.exports = GPT;
 
+/*
 // Example usage:
 const main = async () => {
     const gpt = new GPT();
@@ -109,3 +110,4 @@ const main = async () => {
 };
 
 main();
+*/

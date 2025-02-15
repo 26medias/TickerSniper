@@ -17,20 +17,29 @@ class Sniper {
         this.ticker = ticker;
         this.main_timeframe = "1 minute";
         this.context_timeframe = "1 day";
+        this.model = "gpt-4o-mini"
+        this.llm_interval = 1000*60*2;
+        this.last_llm_actions_time = 0;
+        this.initial_balance = 10000;
         this.datastore = {};
         this.data = {};
-        this.reddit = new RedditTracker(this.data_dir);
-        this.newsLoader = new NewsLoader(this.data_dir);
-        this.trading = new PaperTrading(this.data_dir);
+
+        this.reddit = new RedditTracker(this.data_dir+"/reddit");
+        this.newsLoader = new NewsLoader(this.data_dir+"/news");
+        this.trading = new PaperTrading(this.data_dir+"/trading");
         this.options = new Options();
         this.gpt = new GPT();
 
-        this.model = "gpt-4o-mini"
     }
 
     // Init the market data monitoring
     init() {
         const scope = this;
+
+        if (this.trading.getAccountBalance() <= 0) {
+            this.trading.credit(this.initial_balance, "Initial Balance")
+        }
+
         this.datastore[this.main_timeframe] = new TickerData({
             data_dir: this.data_dir,
             timeframe: this.main_timeframe,
@@ -40,6 +49,15 @@ class Sniper {
             minDatapoints: 50,      // ensure at least 50 data points are loaded
             onTick: (timestamp, open, high, low, close) => {
                 console.log(`[${this.main_timeframe}] - Tick at ${timestamp}: O:${open} H:${high} L:${low} C:${close}`);
+                scope.trading.tick({
+                    symbol: scope.ticker,
+                    timestamp: new Date(timestamp).toISOString(),
+                    open: open,
+                    high: high,
+                    low: low,
+                    close: close,
+                    volume: 0
+                }, new Date(timestamp));
                 scope.onMarketDataUpdate(this.main_timeframe);
             }
         });
@@ -53,32 +71,51 @@ class Sniper {
             minDatapoints: 50,      // ensure at least 50 data points are loaded
             onTick: (timestamp, open, high, low, close) => {
                 console.log(`[${this.main_timeframe}] - Tick at ${timestamp}: O:${open} H:${high} L:${low} C:${close}`);
-                scope.onMarketDataUpdate(this.context_timeframe);
+                //scope.onMarketDataUpdate(this.context_timeframe);
             }
         });
         
-        //this.datastore[this.main_timeframe].start();
-        //this.datastore[this.context_timeframe].start();
+        this.datastore[this.main_timeframe].start();
+        this.datastore[this.context_timeframe].start();
 
-        this.ask();
+        //this.ask();
     }
 
 
     // When there's a tick
-    onMarketDataUpdate(timeframe) {
-        /*const data = this.datastore[timeframe].data();
-        const closes = data.map(item => item.close);
-        const marketCycleCalc = new MarketCycle(closes);
-        const mcs = marketCycleCalc.mc(14, 20);
+    // Decide if we need to call the LLM
+    async onMarketDataUpdate(timeframe) {
+        let askLLM = false;
+        // Refresh reddit
+        this.reddit.refresh(10);
 
-        this.data[timeframe] = data.map((item, n) => {
-            item.mc = mcs[n]
-            return item;
+        // Refresh the news
+        await this.newsLoader.refresh({
+            days: 7,
+            limit: 100,
+            symbols: [this.ticker]
         });
-        this.data[timeframe] = data.filter(item => {
-            return item.mc;
-        });*/
-        this.ask(timeframe);
+        // New news since last time we checked?
+        const lastLLMRequest = new Date().getTime()-this.last_llm_actions_time;
+        let news = this.newsLoader.getByTicker(this.ticker);
+        news = news.filter(item => {
+            return new Date().getTime()-new Date(item.published_utc).getTime() <= lastLLMRequest + 1000*30;
+        })
+
+        if (news.length > 0) {
+            askLLM = true;
+            console.log(`--> ${news.length} news found`);
+        }
+        if (lastLLMRequest > this.llm_interval) {
+            askLLM = true;
+            console.log(`--> ${lastLLMRequest} > ${this.llm_interval}`);
+        }
+
+
+        if (askLLM) {
+            this.last_llm_actions_time = new Date().getTime();
+            this.ask(timeframe);
+        }
     }
 
     // Build the market data for a timeframe: mc, rsi
@@ -130,22 +167,10 @@ class Sniper {
         output.current_volume = last.volume;
 
         // Do the computations
-        /*const last50_closes = last50.map(item => item.close);
-        const marketCycleCalc = new MarketCycle(last50_closes);
-        const marketCycles = marketCycleCalc.mc(14, 20);
-        const RSI = marketCycleCalc.RSI(14, 14);
-        
-        // Assemble the computed data
-        last50 = last50.map((item, n) => {
-            item["marketCycle"] = marketCycles[n]
-            item["RSI"] = RSI[n]
-            return item;
-        })*/
        let last50 = this.buildMarketData(this.main_timeframe)
        let last50_daily = this.buildMarketData(this.context_timeframe)
        
-
-        // Set the basic data
+        // Set the transformation data
         const lastDatapoint = last50[last50.length-1];
         output.current_rsi = lastDatapoint.RSI.toFixed(2);
         output.current_marketcycle = lastDatapoint.marketCycle.toFixed(2);
@@ -200,11 +225,6 @@ class Sniper {
         output.history_data_daily = history_data_daily;
 
         // News
-        await this.newsLoader.refresh({
-            days: 7,
-            limit: 100,
-            symbols: [this.ticker]
-        });
         const news = this.newsLoader.getByTicker(this.ticker);
 
         const newsAgeThreshold = 1000*60*60*24*3;
@@ -235,17 +255,19 @@ class Sniper {
         //console.log(report)
         const sys_prompt = await this.gpt.getPrompt("prompts/actions-system.md")
         const user_prompt = await this.gpt.getPrompt("prompts/actions-user.md", report)
-        console.log("sys_prompt", sys_prompt)
-        console.log("user_prompt", user_prompt)
+        //console.log("sys_prompt", sys_prompt)
+        //console.log("user_prompt", user_prompt)
 
         const response = await this.gpt.ask(sys_prompt, user_prompt, [], [], this.model) //"o3-mini"
-        console.log("response", JSON.stringify(response, null, 4))
+        //console.log("response", JSON.stringify(response, null, 4))
 
         const message = JSON.parse(response.choices[0].message.content);
         const actions = message.actions;
         const reasonning = message.reasonning;
         console.log(actions);
         console.log(reasonning);
+
+        return await this.act(message);
     }
 
     // Act on the actions returned
@@ -255,12 +277,12 @@ class Sniper {
         const reasonning = llm_response.reasonning;
         actions.forEach(item => {
             const last = scope.datastore[scope.main_timeframe].data(1)[0]
-
+            console.log(last)
             switch (item.action) {
                 case "buy":
                     scope.trading.buy(
                         scope.ticker,
-                        last.timestamp,
+                        new Date(last.timestamp),
                         item.limitPrice ? item.limitPrice : last.close,
                         item.qty,
                         item.reason,
@@ -270,8 +292,9 @@ class Sniper {
                     )
                 break;
                 case "sell":
-                    scope.trading.close(scope.ticker,
-                        last.timestamp,
+                    scope.trading.close(
+                        scope.ticker,
+                        new Date(last.timestamp),
                         item.limitPrice ? item.limitPrice : last.close,
                         item.qty,
                         item.reason,
@@ -281,8 +304,7 @@ class Sniper {
                     )
                 break;
             }
-            
-        })
+        });
     }
 }
 

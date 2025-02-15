@@ -159,7 +159,7 @@ class TickerData {
 
         const { multiplier, timespan } = this.getPolygonTimespan();
         const url = `https://api.polygon.io/v2/aggs/ticker/${this.ticker}/range/${multiplier}/${timespan}/${from}/${to}?apiKey=${this.apiKey}`;
-        console.log('Fetching historical data from:', url);
+        //console.log('Fetching historical data from:', url);
 
         try {
             const response = await axios.get(url);
@@ -175,7 +175,7 @@ class TickerData {
                 // Merge newData with cached historical data.
                 this.updateHistoricalData(newData);
                 await this.saveCache();
-                console.log('Historical data updated. Total data points:', this.historicalData.length);
+                //console.log('Historical data updated. Total data points:', this.historicalData.length);
                 // Notify via callback with the latest candle.
                 const latest = this.historicalData[this.historicalData.length - 1];
                 if (typeof this.onTick === 'function') {
