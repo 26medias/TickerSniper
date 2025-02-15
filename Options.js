@@ -43,7 +43,7 @@ class Options {
 
             const response = await axios.get(url, { params });
             const contract = response.data.results;
-            
+            console.log(contract)
             if (!contract) {
                 throw new Error('No contract data found');
             }
@@ -67,19 +67,19 @@ class Options {
     const options = new Options();
 
     // Fetch available contracts for AAPL expiring in 2025
-    let contracts = await options.getAvailableContracts('NVDA', '2025-02-13');
-    const price = 138;
-    /*contracts = contracts.filter(item => {
+    let contracts = await options.getAvailableContracts('SPY', '2025-02-21');
+    const price = 604;
+    contracts = contracts.filter(item => {
         return Math.abs((price-item.strike_price)/price) <= 0.01
-    })*/
+    })
     console.log('Available Contracts:', JSON.stringify(contracts, null, 4));
 
 
 
     // Fetch data for a specific contract
     if (contracts.length > 0) {
-        //const contractData = await options.getContractData(contracts[0].ticker);
-        //console.log('Contract Data:', JSON.stringify(contractData, null, 4));
+        const contractData = await options.getContractData(contracts[0].ticker);
+        console.log('Contract Data:', JSON.stringify(contractData, null, 4));
     }
 })();
 

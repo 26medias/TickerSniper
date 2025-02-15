@@ -12,7 +12,7 @@ const NodeChart = require('./NodeChart');
 */
 
 class Sniper {
-    constructor(ticker="NVDA", data_dir="./data") {
+    constructor(ticker="SPY", data_dir="./data") {
         this.data_dir = data_dir
         this.ticker = ticker;
         this.main_timeframe = "1 minute";
@@ -57,7 +57,7 @@ class Sniper {
         //this.datastore[this.main_timeframe].start();
         //this.datastore[this.context_timeframe].start();
 
-        this.ask(this.main_timeframe);
+        this.ask();
     }
 
     onMarketDataUpdate(timeframe) {
@@ -76,36 +76,9 @@ class Sniper {
         this.ask(timeframe);
     }
 
-    async generateReport(timeframe) {
-        const scope = this;
-        let output = {};
-
-        const count = 10;
-        output.count = count;
-        
+    buildMarketData(timeframe) {
         const history = this.datastore[timeframe];
-
-        // Get the reddit data
-        const redditData = this.reddit.get("PLTR");
-        output.reddit_mentions = redditData.mentions;
-        output.reddit_mentions_24h_ago = redditData.mentions_24h_ago;
-        output.reddit_upvotes = redditData.upvotes;
-        output.reddit_upvotes = redditData.upvotes;
-        output.reddit_rank = redditData.rank;
-        output.reddit_rank_24h_ago = redditData.rank_24h_ago;
-        
-        // Get the last & last 50 datapoints
-        const last = history.data(1)[0];
         let last50 = history.data(50);
-
-        // Set the basic data
-        output.ticker = this.ticker;
-        output.date = new Date(last.timestamp).toLocaleDateString();
-        output.time = new Date(last.timestamp).toLocaleTimeString();
-        output.current_price = last.close.toFixed(2);
-        output.current_volume = last.volume;
-
-        // Do the computations
         const last50_closes = last50.map(item => item.close);
         const marketCycleCalc = new MarketCycle(last50_closes);
         const marketCycles = marketCycleCalc.mc(14, 20);
@@ -117,6 +90,53 @@ class Sniper {
             item["RSI"] = RSI[n]
             return item;
         })
+        return last50;
+    }
+
+    async generateReport() {
+        const scope = this;
+        let output = {};
+
+        const count = 10;
+        output.count = count;
+
+        const history = this.datastore[this.main_timeframe];
+
+        // Get the reddit data
+        const redditData = this.reddit.get(this.ticker);
+        output.reddit_mentions = redditData.mentions;
+        output.reddit_mentions_24h_ago = redditData.mentions_24h_ago;
+        output.reddit_upvotes = redditData.upvotes;
+        output.reddit_upvotes = redditData.upvotes;
+        output.reddit_rank = redditData.rank;
+        output.reddit_rank_24h_ago = redditData.rank_24h_ago;
+        
+        // Get the last & last 50 datapoints
+        const last = history.data(1)[0];
+        //let last50 = history.data(50);
+
+        // Set the basic data
+        output.ticker = this.ticker;
+        output.date = new Date(last.timestamp).toLocaleDateString();
+        output.time = new Date(last.timestamp).toLocaleTimeString();
+        output.current_price = last.close.toFixed(2);
+        output.current_volume = last.volume;
+
+        // Do the computations
+        /*const last50_closes = last50.map(item => item.close);
+        const marketCycleCalc = new MarketCycle(last50_closes);
+        const marketCycles = marketCycleCalc.mc(14, 20);
+        const RSI = marketCycleCalc.RSI(14, 14);
+        
+        // Assemble the computed data
+        last50 = last50.map((item, n) => {
+            item["marketCycle"] = marketCycles[n]
+            item["RSI"] = RSI[n]
+            return item;
+        })*/
+       let last50 = this.buildMarketData(this.main_timeframe)
+       let last50_daily = this.buildMarketData(this.context_timeframe)
+       
 
         // Set the basic data
         const lastDatapoint = last50[last50.length-1];
@@ -144,8 +164,7 @@ class Sniper {
         output.option_contracts = JSON.stringify(contracts, null, 4);
 
         // Historical data
-        const last_points = last50.slice(last50.length-count);
-        const history_data = last_points.map(item => {
+        const history_data = last50.slice(last50.length-count).map(item => {
             const date = new Date(item.timestamp).toLocaleDateString();
             const time = new Date(item.timestamp).toLocaleTimeString();
             return [
@@ -157,15 +176,28 @@ class Sniper {
                 `MarketCycle: ${item.marketCycle.toFixed(2)}`,
             ].join("\n")
         }).join("\n\n")
+        const history_data_daily = last50_daily.slice(last50_daily.length-count).map(item => {
+            const date = new Date(item.timestamp).toLocaleDateString();
+            const time = new Date(item.timestamp).toLocaleTimeString();
+            return [
+                `[${date}]`,
+                `Open: $${item.open.toFixed(2)}`,
+                `Close: $${item.close.toFixed(2)}`,
+                `Volume: ${item.volume}`,
+                `RSI: ${item.RSI.toFixed(2)}`,
+                `MarketCycle: ${item.marketCycle.toFixed(2)}`,
+            ].join("\n")
+        }).join("\n\n")
 
         output.history_data = history_data;
+        output.history_data_daily = history_data_daily;
 
         // News
-        /*await this.newsLoader.refresh({
+        await this.newsLoader.refresh({
             days: 7,
             limit: 100,
             symbols: [this.ticker]
-        });*/
+        });
         const news = this.newsLoader.getByTicker(this.ticker);
 
         const newsAgeThreshold = 1000*60*60*24*3;
@@ -190,8 +222,8 @@ class Sniper {
         return output;
     }
 
-    async ask(timeframe) {
-        const report = await this.generateReport(timeframe);
+    async ask() {
+        const report = await this.generateReport();
         //console.log(report)
         const sys_prompt = await this.gpt.getPrompt("prompts/actions-system.md")
         const user_prompt = await this.gpt.getPrompt("prompts/actions-user.md", report)

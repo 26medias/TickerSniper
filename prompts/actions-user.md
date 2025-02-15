@@ -19,9 +19,14 @@
 
 {{history_data}}
 
+### Past {{count}} days of data
+
+{{history_data_daily}}
+
 ## Latest news
 
 {{news}}
+
 
 # Trading
 
