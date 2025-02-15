@@ -42,20 +42,82 @@ const getStockData = () => {
     return last50//.slice(last50.length-50)
 }
 
+const getMinMax = (data) => {
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const { open, high, low, close } of data) {
+        min = Math.min(min, open, high, low, close);
+        max = Math.max(max, open, high, low, close);
+    }
+
+    return { min, max };
+};
+
 const generateChart = (data, width=800, height=600) => {
-    console.log(data)
+    //console.log(data)
     const chart = new NodeChart({
         width: width,
         height: height,
         data: data,
-        padding: 10,      // 10px padding around the edge of the canvas
+        padding: 30,      // 10px padding around the edge of the canvas
         panelGap: 10,     // 10px gap between panels
         renderAxis: {
             x: false,    // Do not render the x axis
             y: true      // Render the y axis
         }
     });
-    
+
+
+    const sr = new MarketSR(data);
+
+    const supports = sr.supports()
+    const resistances = sr.resistances()
+    const minMax = getMinMax(data);
+
+
+
+    const lines = [];
+
+    lines.push({
+        id: `max`,
+        type: "horizontal-line",
+        data: {
+            value: minMax.max
+        },
+        color: { r: 255, g: 255, b: 255, a: 255 }
+    })
+    lines.push({
+        id: `min`,
+        type: "horizontal-line",
+        data: {
+            value: minMax.min
+        },
+        color: { r: 255, g: 255, b: 255, a: 255 }
+    })
+
+    supports.forEach(item => {
+        const color = { r: 0, g: 0, b: 255, a: 255 };
+        lines.push({
+            id: `support-${item.level.toFixed(2)}`,
+            type: "horizontal-line",
+            data: {
+                value: parseFloat(item.level.toFixed(2))
+            },
+            color: color
+        })
+    })
+    resistances.forEach(item => {
+        lines.push({
+            id: `resistance-${item.level.toFixed(2)}`,
+            type: "horizontal-line",
+            data: {
+                value: parseFloat(item.level.toFixed(2))
+            },
+            color: { r: 255, g: 0, b: 0, a: 255 }
+        })
+    })
+
     chart.addPanel({
         id: "stock-data",
         height: 70,
@@ -75,7 +137,8 @@ const generateChart = (data, width=800, height=600) => {
                     up: { r: 74, g: 164, b: 154, a: 255 },
                     down: { r: 226, g: 96, b: 83, a: 255 }
                 }
-            }
+            },
+            ...lines
         ]
     });
     
@@ -193,6 +256,7 @@ const generateChart = (data, width=800, height=600) => {
         ]
     });
 
+    const stockBox = chart.getBoundingBox('stock-data')
     const rsiBox = chart.getBoundingBox('RSI')
     const mcBox = chart.getBoundingBox('marketcycle')
 
@@ -205,47 +269,68 @@ const generateChart = (data, width=800, height=600) => {
 
     chart.render()
 
+    const marginX = 5;
+    const marginY = -3;
 
     // Render the panels labels
     const mcMax = chart.getCoordinates(data.length-1, "marketcycle", "100");
-    chart.canvas.write(mcMax.x+20, mcMax.y+5, "100", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(mcMax.x+marginX, mcMax.y+marginY, "100", { r: 255, g: 255, b: 255, a: 100 })
 
     const mcMid = chart.getCoordinates(data.length-1, "marketcycle", "50");
-    chart.canvas.write(mcMid.x+20, mcMid.y+5, "50", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(mcMid.x+marginX, mcMid.y+marginY, "50", { r: 255, g: 255, b: 255, a: 100 })
 
     const mcMin = chart.getCoordinates(data.length-1, "marketcycle", "0");
-    chart.canvas.write(mcMin.x+20, mcMin.y-10, "0", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(mcMin.x+marginX, mcMin.y+marginY, "0", { r: 255, g: 255, b: 255, a: 100 })
 
     const mcUp = chart.getCoordinates(data.length-1, "marketcycle", "overbought");
-    chart.canvas.write(mcUp.x+20, mcUp.y+5, "70", { r: 226, g: 96, b: 83, a: 255 })
+    chart.canvas.write(mcUp.x+marginX, mcUp.y+marginY, "70", { r: 226, g: 96, b: 83, a: 255 })
 
     const mcDn = chart.getCoordinates(data.length-1, "marketcycle", "oversold");
-    chart.canvas.write(mcDn.x+20, mcDn.y+5, "30", { r: 74, g: 164, b: 154, a: 255 })
+    chart.canvas.write(mcDn.x+marginX, mcDn.y+marginY, "30", { r: 74, g: 164, b: 154, a: 255 })
 
-    chart.canvas.write(mcBox.x+5, mcBox.y+10, "MARKETCYCLE", { r: 255, g: 255, b: 255, a: 255 }, {font: 'large'})
+    chart.canvas.write(mcBox.x+5, mcBox.y+10, "MARKETCYCLE: "+data[data.length-1].marketCycle.toFixed(2), { r: 255, g: 255, b: 255, a: 255 }, {font: 'large'})
 
 
 
     const rsiMax = chart.getCoordinates(data.length-1, "RSI", "100");
-    chart.canvas.write(rsiMax.x+20, rsiMax.y+5, "100", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(rsiMax.x+marginX, rsiMax.y+marginY, "100", { r: 255, g: 255, b: 255, a: 100 })
 
     const rsiMid = chart.getCoordinates(data.length-1, "RSI", "50");
-    chart.canvas.write(rsiMid.x+20, rsiMid.y+5, "50", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(rsiMid.x+marginX, rsiMid.y+marginY, "50", { r: 255, g: 255, b: 255, a: 100 })
 
     const rsiMin = chart.getCoordinates(data.length-1, "RSI", "0");
-    chart.canvas.write(rsiMin.x+20, rsiMin.y-10, "0", { r: 255, g: 255, b: 255, a: 100 })
+    chart.canvas.write(rsiMin.x+marginX, rsiMin.y+marginY, "0", { r: 255, g: 255, b: 255, a: 100 })
 
     const rsiUp = chart.getCoordinates(data.length-1, "RSI", "overbought");
-    chart.canvas.write(rsiUp.x+20, rsiUp.y+5, "70", { r: 226, g: 96, b: 83, a: 255 })
+    chart.canvas.write(rsiUp.x+marginX, rsiUp.y+marginY, "70", { r: 226, g: 96, b: 83, a: 255 })
 
     const rsiDn = chart.getCoordinates(data.length-1, "RSI", "oversold");
-    chart.canvas.write(rsiDn.x+20, rsiDn.y+5, "30", { r: 74, g: 164, b: 154, a: 255 })
+    chart.canvas.write(rsiDn.x+marginX, rsiDn.y+marginY, "30", { r: 74, g: 164, b: 154, a: 255 })
 
-    chart.canvas.write(rsiBox.x+5, rsiBox.y+10, "RSI", { r: 255, g: 255, b: 255, a: 255 }, {font: 'large'})
+    chart.canvas.write(rsiBox.x+5, rsiBox.y+10, "RSI: "+data[data.length-1].RSI.toFixed(2), { r: 255, g: 255, b: 255, a: 255 }, {font: 'large'})
 
-    const sr = new MarketSR(data);
-    console.log("Supports:", sr.supports());
-    console.log("Resistances:", sr.resistances());
+    // SR labels
+    supports.forEach(item => {
+        const color = { r: 0, g: 0, b: 255, a: 255 };
+        const name = `support-${item.level.toFixed(2)}`
+        const lineCoords = chart.getCoordinates(data.length-1, "stock-data", name);
+        chart.canvas.write(lineCoords.x+marginX, lineCoords.y+marginY, item.level.toFixed(2), color)
+    });
+    resistances.forEach(item => {
+        const color = { r: 255, g: 0, b: 0, a: 255 };
+        const name = `resistance-${item.level.toFixed(2)}`
+        const lineCoords = chart.getCoordinates(data.length-1, "stock-data", name);
+        chart.canvas.write(lineCoords.x+marginX, lineCoords.y+marginY, item.level.toFixed(2), color)
+    });
+
+    // Min/max
+    const maxCoords = chart.getCoordinates(data.length-1, "stock-data", "max");
+    chart.canvas.write(maxCoords.x+marginX, maxCoords.y+marginY, minMax.max.toFixed(2), { r: 255, g: 255, b: 255, a: 255 })
+    const minCoords = chart.getCoordinates(data.length-1, "stock-data", "min");
+    chart.canvas.write(minCoords.x+marginX, minCoords.y+marginY, minMax.min.toFixed(2), { r: 255, g: 255, b: 255, a: 255 })
+
+    // Price
+    chart.canvas.write(stockBox.x+marginX, stockBox.y-20, "Current price: "+data[data.length-1].close.toFixed(2), { r: 255, g: 255, b: 255, a: 255 }, {font: 'large'})
     
     chart.save("chart3.png");
 }
