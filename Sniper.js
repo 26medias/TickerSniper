@@ -1,8 +1,10 @@
 const TickerData = require('./TickerData');
 const MarketCycle = require('./MarketCycle');
-const NodeChart = require('./NodeChart');
 const RedditTracker = require('./RedditTracker');
 const NewsLoader = require('./NewsLoader');
+const PaperTrading = require('./PaperTrading');
+const Options = require('./Options');
+const NodeChart = require('./NodeChart');
 
 /*
 
@@ -18,6 +20,8 @@ class Sniper {
         this.data = {};
         this.reddit = new RedditTracker(this.data_dir);
         this.newsLoader = new NewsLoader(this.data_dir);
+        this.trading = new PaperTrading(this.data_dir);
+        this.options = new Options();
     }
 
     init() {
@@ -71,6 +75,7 @@ class Sniper {
     }
 
     async generateReport(timeframe) {
+        const scope = this;
         let output = {};
 
         const count = 10;
@@ -81,7 +86,8 @@ class Sniper {
         output.reddit_mentions = redditData.mentions;
         output.reddit_mentions_24h_ago = redditData.mentions_24h_ago;
         output.reddit_upvotes = redditData.upvotes;
-        output.rank_upvotes = redditData.upvotes;
+        output.reddit_upvotes = redditData.upvotes;
+        output.reddit_rank = redditData.rank;
         output.reddit_rank_24h_ago = redditData.rank_24h_ago;
         
         // Get the last & last 50 datapoints
@@ -113,6 +119,26 @@ class Sniper {
         output.current_rsi = lastDatapoint.RSI.toFixed(2);
         output.current_marketcycle = lastDatapoint.marketCycle.toFixed(2);
 
+
+        // Portfolio
+        output.cash_balance = this.trading.getAccountBalance();
+        console.log("getPortfolio()", JSON.stringify(this.trading.getPortfolio(), null, 4))
+        const ticker_positions = this.trading.getPortfolio().filter(item => {
+            return item.symbol == this.ticker || item.underlying == scope.ticker
+        });
+        console.log("ticker_positions", JSON.stringify(ticker_positions, null, 4))
+        output.open_positions = ticker_positions.length==0 ? "None" : JSON.stringify(ticker_positions, null, 4);
+
+        // Options contracts
+        const d = new Date(last.timestamp);
+        const day = "2025-02-21"//d.toISOString().split("T")[0]; @DEBUG
+        let contracts = await this.options.getAvailableContracts(this.ticker, day);
+        contracts = contracts.filter(item => {
+            return Math.abs((output.current_price-item.strike_price)/output.current_price) <= 0.01
+        })
+        //console.log(day, contracts)
+        output.option_contracts = JSON.stringify(contracts, null, 4);
+
         // Historical data
         const last_points = last50.slice(last50.length-count);
         const history_data = last_points.map(item => {
@@ -122,24 +148,42 @@ class Sniper {
                 `[${date} ${time}]`,
                 `Open: $${item.open.toFixed(2)}`,
                 `Close: $${item.close.toFixed(2)}`,
-                `Volume: $${item.volume}`,
-                `RSI: $${item.RSI.toFixed(2)}`,
-                `MarketCycle: $${item.marketCycle.toFixed(2)}`,
+                `Volume: ${item.volume}`,
+                `RSI: ${item.RSI.toFixed(2)}`,
+                `MarketCycle: ${item.marketCycle.toFixed(2)}`,
             ].join("\n")
         }).join("\n\n")
 
         output.history_data = history_data;
 
         // News
-        await this.newsLoader.refresh({
+        /*await this.newsLoader.refresh({
             days: 7,
             limit: 100,
             symbols: [this.ticker]
-        });
+        });*/
         const news = this.newsLoader.getByTicker(this.ticker);
-        output.news = news;
+
+        const newsAgeThreshold = 1000*60*60*24*3;
+
+        const newsSummary = news.filter(item => {
+            return new Date().getTime()-new Date(item.published_utc).getTime() <= newsAgeThreshold;
+        }).map(item => {
+            const date = new Date(item.published_utc).toLocaleDateString();
+            const time = new Date(item.published_utc).toLocaleTimeString();
+            const insights = item.insights.find(insight => insight.ticker == this.ticker)
+            return [
+                `[${date} ${time}]`,
+                `Description: ${item.description}.\n${insights.sentiment_reasoning}`,
+                `Sentiment: ${insights.sentiment}`,
+            ].join('\n')
+        }).join('\n\n');
+        output.news = newsSummary;
 
         console.log(output)
+
+        //console.log(JSON.stringify(news, null, 4));
+        return output;
     }
 }
 
@@ -148,8 +192,8 @@ sniper.init();
 
 /*
 TODO:
-- [ ] Filter news?
-- [ ] Aggregate/format news
+- [x] Filter news
+- [x] Aggregate/format news
 - [ ] Integrate portfolio
 - [ ] Integrate options tracking
 */

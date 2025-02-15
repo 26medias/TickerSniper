@@ -33,9 +33,9 @@
 
 **Cash balance available:** ${{cash_balance}}
 
-## Open position in the portfolio
+## Open positions in the portfolio
 
-{{open_position}}
+{{open_positions}}
 
 ## Available options contracts
 
