@@ -4,6 +4,7 @@ const RedditTracker = require('./RedditTracker');
 const NewsLoader = require('./NewsLoader');
 const PaperTrading = require('./PaperTrading');
 const Options = require('./Options');
+const GPT = require('./GPT');
 const NodeChart = require('./NodeChart');
 
 /*
@@ -22,6 +23,7 @@ class Sniper {
         this.newsLoader = new NewsLoader(this.data_dir);
         this.trading = new PaperTrading(this.data_dir);
         this.options = new Options();
+        this.gpt = new GPT();
     }
 
     init() {
@@ -55,7 +57,7 @@ class Sniper {
         //this.datastore[this.main_timeframe].start();
         //this.datastore[this.context_timeframe].start();
 
-        this.generateReport(this.main_timeframe);
+        this.ask(this.main_timeframe);
     }
 
     onMarketDataUpdate(timeframe) {
@@ -71,7 +73,7 @@ class Sniper {
         this.data[timeframe] = data.filter(item => {
             return item.mc;
         });*/
-        this.generateReport(timeframe);
+        this.ask(timeframe);
     }
 
     async generateReport(timeframe) {
@@ -79,6 +81,8 @@ class Sniper {
         let output = {};
 
         const count = 10;
+        output.count = count;
+        
         const history = this.datastore[timeframe];
 
         // Get the reddit data
@@ -122,11 +126,11 @@ class Sniper {
 
         // Portfolio
         output.cash_balance = this.trading.getAccountBalance();
-        console.log("getPortfolio()", JSON.stringify(this.trading.getPortfolio(), null, 4))
+        //console.log("getPortfolio()", JSON.stringify(this.trading.getPortfolio(), null, 4))
         const ticker_positions = this.trading.getPortfolio().filter(item => {
             return item.symbol == this.ticker || item.underlying == scope.ticker
         });
-        console.log("ticker_positions", JSON.stringify(ticker_positions, null, 4))
+        //console.log("ticker_positions", JSON.stringify(ticker_positions, null, 4))
         output.open_positions = ticker_positions.length==0 ? "None" : JSON.stringify(ticker_positions, null, 4);
 
         // Options contracts
@@ -180,10 +184,19 @@ class Sniper {
         }).join('\n\n');
         output.news = newsSummary;
 
-        console.log(output)
+        //console.log(output)
 
         //console.log(JSON.stringify(news, null, 4));
         return output;
+    }
+
+    async ask(timeframe) {
+        const report = await this.generateReport(timeframe);
+        //console.log(report)
+        const sys_prompt = await this.gpt.getPrompt("prompts/actions-system.md")
+        const user_prompt = await this.gpt.getPrompt("prompts/actions-user.md", report)
+        console.log("sys_prompt", sys_prompt)
+        console.log("user_prompt", user_prompt)
     }
 }
 

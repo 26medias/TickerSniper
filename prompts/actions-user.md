@@ -11,23 +11,17 @@
 - Current MarketCycle (period:14): {{current_marketcycle}}
 - Mentions on reddit (today): {{reddit_mentions}} (was {{reddit_mentions_24h_ago}} yesterday)
 - Upvotes on reddit (today): {{reddit_upvotes}}
-- Rank on reddit (today): #{{rank_upvotes}} (was #{{reddit_rank_24h_ago}} yesterday)
+- Rank on reddit (today): #{{reddit_rank}} (was #{{reddit_rank_24h_ago}} yesterday)
 
 ## Historical context
 
 ### Past {{count}} minutes of data
 
-{{minute_data}}
-
-### Past {{count}} days of data
-
-{{day_data}}
-
+{{history_data}}
 
 ## Latest news
 
 {{news}}
-
 
 # Trading
 
