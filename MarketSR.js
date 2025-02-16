@@ -1,71 +1,114 @@
 class MarketSR {
-    constructor(data, threshold = 0.2) {
-        // Sort data by timestamp to ensure proper ordering.
+    constructor(data, options = {}) {
+        // Options
+        this.pivotLookback = options.pivotLookback ?? 3;
+        this.clusterThreshold = options.clusterThreshold ?? 0.5;
+
+        // Sort data by timestamp to ensure correct ordering
         this.data = data.sort(
             (a, b) => new Date(a.timestamp) - new Date(b.timestamp)
         );
-        // Threshold for clustering candidate levels (can be adjusted).
-        this.threshold = threshold;
     }
 
-    supports() {
-        // Identify candidate supports using local minima on the 'low' field.
-        const candidates = [];
-        for (let i = 1; i < this.data.length - 1; i++) {
-            const prev = this.data[i - 1].low;
-            const current = this.data[i].low;
-            const next = this.data[i + 1].low;
-            if (current < prev && current < next) {
-                candidates.push(current);
+    /**
+     * Identify major pivot points for supports (lows) and resistances (highs).
+     * A pivot high: the highest among N bars before and N bars after.
+     * A pivot low : the lowest among N bars before and N bars after.
+     */
+    getPivotPoints() {
+        const pivotHighs = [];
+        const pivotLows = [];
+        const n = this.pivotLookback;
+
+        // Skip the first/last N bars because they can't form a pivot with incomplete neighbors.
+        for (let i = n; i < this.data.length - n; i++) {
+            const currentHigh = this.data[i].high;
+            const currentLow = this.data[i].low;
+
+            let isPivotHigh = true;
+            let isPivotLow = true;
+
+            // Check the N candles before and after
+            for (let j = i - n; j <= i + n; j++) {
+                if (this.data[j].high > currentHigh) {
+                    isPivotHigh = false;
+                }
+                if (this.data[j].low < currentLow) {
+                    isPivotLow = false;
+                }
+                if (!isPivotHigh && !isPivotLow) break;
+            }
+
+            if (isPivotHigh) {
+                pivotHighs.push(currentHigh);
+            }
+            if (isPivotLow) {
+                pivotLows.push(currentLow);
             }
         }
-        return this._clusterLevels(candidates);
+
+        return { pivotHighs, pivotLows };
     }
 
-    resistances() {
-        // Identify candidate resistances using local maxima on the 'high' field.
-        const candidates = [];
-        for (let i = 1; i < this.data.length - 1; i++) {
-            const prev = this.data[i - 1].high;
-            const current = this.data[i].high;
-            const next = this.data[i + 1].high;
-            if (current > prev && current > next) {
-                candidates.push(current);
-            }
-        }
-        return this._clusterLevels(candidates);
-    }
+    /**
+     * Cluster an array of numeric values so that points within
+     * 'this.clusterThreshold' distance end up in the same cluster.
+     */
+    clusterLevels(levels) {
+        if (!levels.length) return [];
 
-    _clusterLevels(candidates) {
-        // Cluster candidate levels that are within the threshold.
+        // Sort the levels so we can easily group nearby points
+        levels.sort((a, b) => a - b);
+
         const clusters = [];
-        // Sort candidates to group nearby levels.
-        candidates.sort((a, b) => a - b);
-        for (const candidate of candidates) {
-            let added = false;
-            for (const cluster of clusters) {
-                if (Math.abs(candidate - cluster.level) <= this.threshold) {
-                    // Update the cluster: recalc the weighted (average) level.
-                    cluster.sum += candidate;
-                    cluster.count += 1;
-                    cluster.level = cluster.sum / cluster.count;
-                    added = true;
+        for (const lvl of levels) {
+            let foundCluster = false;
+
+            for (const c of clusters) {
+                // If this level is close enough to the cluster's center
+                if (Math.abs(lvl - c.center) <= this.clusterThreshold) {
+                    // Merge into this cluster
+                    c.points.push(lvl);
+                    // Update the center (average of points)
+                    c.center = c.points.reduce((acc, val) => acc + val, 0) / c.points.length;
+                    foundCluster = true;
                     break;
                 }
             }
-            if (!added) {
-                clusters.push({ level: candidate, count: 1, sum: candidate });
+
+            // If not found a matching cluster, create a new one
+            if (!foundCluster) {
+                clusters.push({ points: [lvl], center: lvl });
             }
         }
-        // Sort clusters by level.
-        clusters.sort((a, b) => a.level - b.level);
-        // Return an array of objects with the representative level and its weight.
-        return clusters.map(cluster => ({
-            level: cluster.level,
-            weight: cluster.count
-        }));
+
+        // Convert to a simpler format: { level, weight }
+        return clusters
+            .map(c => ({
+                level: c.center,
+                weight: c.points.length,
+            }))
+            // Optional: sort by weight descending (so biggest clusters appear first)
+            .sort((a, b) => b.weight - a.weight);
+    }
+
+    /**
+     * Return support levels sorted by significance (weight).
+     */
+    supports() {
+        const { pivotLows } = this.getPivotPoints();
+        return this.clusterLevels(pivotLows);
+    }
+
+    /**
+     * Return resistance levels sorted by significance (weight).
+     */
+    resistances() {
+        const { pivotHighs } = this.getPivotPoints();
+        return this.clusterLevels(pivotHighs);
     }
 }
+
 module.exports = MarketSR;
 
 /*

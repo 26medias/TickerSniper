@@ -49,7 +49,7 @@ class Sniper {
             ticker: this.ticker,
             refreshInterval: 60000, // refresh every 60 seconds
             isStock: true,          // use market hours logic for stocks
-            minDatapoints: 50,      // ensure at least 50 data points are loaded
+            minDatapoints: 200,      // ensure at least 200 data points are loaded
             onTick: (timestamp, open, high, low, close) => {
                 console.log(`[${this.main_timeframe}] - Tick at ${timestamp}: O:${open} H:${high} L:${low} C:${close}`);
                 scope.trading.tick({
@@ -71,15 +71,15 @@ class Sniper {
             ticker: this.ticker,
             refreshInterval: 60000, // refresh every 60 seconds
             isStock: true,          // use market hours logic for stocks
-            minDatapoints: 50,      // ensure at least 50 data points are loaded
+            minDatapoints: 200,      // ensure at least 200 data points are loaded
             onTick: (timestamp, open, high, low, close) => {
                 console.log(`[${this.main_timeframe}] - Tick at ${timestamp}: O:${open} H:${high} L:${low} C:${close}`);
                 //scope.onMarketDataUpdate(this.context_timeframe);
             }
         });
         
-        this.datastore[this.main_timeframe].start();
-        this.datastore[this.context_timeframe].start();
+        //this.datastore[this.main_timeframe].start();
+        //this.datastore[this.context_timeframe].start();
 
         this.ask();
     }
@@ -168,6 +168,8 @@ class Sniper {
                 y: true      // Render the y axis
             }
         });
+
+        console.log(data.length, filename)
     
     
         const sr = new MarketSR(data);
@@ -176,6 +178,7 @@ class Sniper {
         const resistances = sr.resistances()
         const minMax = this.getMinMax(data);
     
+        console.log({resistances, supports})
     
     
         const lines = [];
@@ -198,14 +201,15 @@ class Sniper {
         })
     
         supports.forEach(item => {
-            const color = { r: 0, g: 0, b: 255, a: 255 };
+            const color = { r: 74, g: 164, b: 154, a: 255 };
             lines.push({
                 id: `support-${item.level.toFixed(2)}`,
                 type: "horizontal-line",
                 data: {
                     value: parseFloat(item.level.toFixed(2))
                 },
-                color: color
+                color: color,
+                thickness: item.weight
             })
         })
         resistances.forEach(item => {
@@ -215,7 +219,8 @@ class Sniper {
                 data: {
                     value: parseFloat(item.level.toFixed(2))
                 },
-                color: { r: 255, g: 0, b: 0, a: 255 }
+                color: { r: 226, g: 96, b: 83, a: 255 },
+                thickness: item.weight
             })
         })
     
@@ -412,13 +417,13 @@ class Sniper {
     
         // SR labels
         supports.forEach(item => {
-            const color = { r: 0, g: 0, b: 255, a: 255 };
+            const color = { r: 74, g: 164, b: 154, a: 255 };
             const name = `support-${item.level.toFixed(2)}`
             const lineCoords = chart.getCoordinates(data.length-1, "stock-data", name);
             chart.canvas.write(lineCoords.x+marginX, lineCoords.y+marginY, item.level.toFixed(2), color)
         });
         resistances.forEach(item => {
-            const color = { r: 255, g: 0, b: 0, a: 255 };
+            const color = { r: 226, g: 96, b: 83, a: 255 };
             const name = `resistance-${item.level.toFixed(2)}`
             const lineCoords = chart.getCoordinates(data.length-1, "stock-data", name);
             chart.canvas.write(lineCoords.x+marginX, lineCoords.y+marginY, item.level.toFixed(2), color)
@@ -557,6 +562,7 @@ class Sniper {
     // Ask the LLM what to do with a report
     async ask() {
         const report = await this.generateReport();
+        return true;
         //console.log(report)
         const sys_prompt = await this.gpt.getPrompt("prompts/actions-system.md")
         const user_prompt = await this.gpt.getPrompt("prompts/actions-user.md", report)

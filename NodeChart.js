@@ -311,7 +311,7 @@ class NodeChart {
                             const value = plot.data.value;
                             color = plot.color ? plot.color : this.colorScheme.horizontalLine;
                             const y = bb.y + bb.height - ((value - panel.min) / (panel.max - panel.min)) * bb.height;
-                            this.canvas.line(bb.x, y, bb.x + bb.width, y, color);
+                            this.canvas.line(bb.x, y, bb.x + bb.width, y, color, plot.thickness || 1);
                             break;
                         }
                         default:
